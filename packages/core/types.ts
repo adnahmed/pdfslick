@@ -97,6 +97,11 @@ export type TEventBusEvent = {
 };
 
 export type PDFSlickOptions = {
+  onPassword?: (
+    verifyPassword: (password: string) => void,
+    reason: number
+  ) => void;
+  password?: string;
   textLayerMode?: number;
   annotationMode?: number;
   annotationEditorMode?: number;
@@ -105,7 +110,7 @@ export type PDFSlickOptions = {
   enablePrintAutoRotate?: boolean;
   useOnlyCssZoom?: boolean;
   pageColors?: { background: any; foreground: any };
-  annotationEditorHighlightColors?: string,
+  annotationEditorHighlightColors?: string;
   l10n?: any;
   maxCanvasPixels?: number;
   printResolution?: number;

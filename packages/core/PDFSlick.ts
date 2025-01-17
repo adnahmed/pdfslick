@@ -1,61 +1,61 @@
 import {
-    GlobalWorkerOptions,
-    getDocument,
-    getPdfFilenameFromUrl,
+    AbortException,
+    AnnotationEditorParamsType,
     AnnotationEditorType,
     AnnotationMode,
-    PDFDocumentProxy,
-    version,
-    PDFDateString,
-    AbortException,
-    MissingPDFException,
+    GlobalWorkerOptions,
     InvalidPDFException,
+    MissingPDFException,
+    PDFDateString,
+    PDFDocumentProxy,
     RenderingCancelledException,
     UnexpectedResponseException,
-    AnnotationEditorParamsType
+    getDocument,
+    getPdfFilenameFromUrl
 } from "pdfjs-dist";
 import {
-    EventBus,
-    PDFViewer,
-    PDFLinkService,
-    GenericL10n,
     DownloadManager,
+    EventBus,
+    GenericL10n,
     PDFFindController,
+    PDFLinkService,
     PDFPageView,
-    PDFSinglePageViewer
+    PDFSinglePageViewer,
+    PDFViewer
 } from "pdfjs-dist/web/pdf_viewer.mjs";
 
 import { IL10n, PDFViewerOptions } from "pdfjs-dist/types/web/pdf_viewer";
 import type {
-    TEventBusEvent,
     PDFSlickInputArgs,
+    PDFSlickOptions,
     PDFSlickState,
+    TEventBusEvent,
+    TEventBusListener,
     TEventBusName,
     TEventBusOptions,
-    TEventBusListener,
-    TPDFDocumentOutline,
     TPDFDocumentAttachments,
+    TPDFDocumentOutline
 } from "./types";
 
-import {
-    PDFThumbnailViewer,
-    PDFRenderingQueue,
-    PDFPrintServiceFactory,
-    PDFPresentationMode,
-} from "./lib";
 import { PDFRenderingQueue as TPDFRenderingQueue } from "pdfjs-dist/types/web/pdf_page_view";
 import { PDFThumbnailViewer as TPDFThumbnailViewer } from "pdfjs-dist/types/web/pdf_thumbnail_viewer";
+import {
+    PDFPresentationMode,
+    PDFPrintServiceFactory,
+    PDFRenderingQueue,
+    PDFThumbnailViewer
+} from "./lib";
 
 import { StoreApi } from "zustand/vanilla";
-import { create as createStore } from "./store";
 import {
     TextLayerMode,
     getPageSizeInches,
     isPortraitOrientation,
-    isValidSpreadMode,
-    isValidScrollMode,
     isValidRotation,
+    isValidScrollMode,
+    isValidSpreadMode
 } from "./lib/ui_utils";
+import { create as createStore } from "./store";
 
 export type PDFException =
     | AbortException
@@ -65,17 +65,17 @@ export type PDFException =
     | UnexpectedResponseException;
 
 GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
+    "pdfjs-dist/build/pdf.worker.min.mjs",
     import.meta.url
 ).toString();
 
 const US_PAGE_NAMES = {
     "8.5x11": "Letter",
-    "8.5x14": "Legal",
+    "8.5x14": "Legal"
 };
 const METRIC_PAGE_NAMES = {
     "297x420": "A3",
-    "210x297": "A4",
+    "210x297": "A4"
 };
 
 function getPageName(
@@ -146,7 +146,9 @@ export class PDFSlick {
             options?.annotationMode ?? AnnotationMode.ENABLE_FORMS;
         this.#annotationEditorMode =
             options?.annotationEditorMode ?? AnnotationEditorType.NONE;
-        this.annotationEditorHighlightColors = options?.annotationEditorHighlightColors ?? "yellow=#FFFF98,green=#53FFBC,blue=#80EBFF,pink=#FFCBE6,red=#FF4F5F"
+        this.annotationEditorHighlightColors =
+            options?.annotationEditorHighlightColors ??
+            "yellow=#FFFF98,green=#53FFBC,blue=#80EBFF,pink=#FFCBE6,red=#FF4F5F";
         this.removePageBorders = options?.removePageBorders ?? false;
         this.singlePageViewer = options?.singlePageViewer ?? false;
         this.enablePrintAutoRotate = options?.enablePrintAutoRotate ?? false;
@@ -183,7 +185,7 @@ export class PDFSlick {
             eventBus,
             externalLinkTarget: 2,
             externalLinkRel: "noopener noreferrer nofollow",
-            ignoreDestinationZoom: false,
+            ignoreDestinationZoom: false
         });
 
         const viewerOptions: PDFViewerOptions = {
@@ -198,7 +200,7 @@ export class PDFSlick {
             annotationMode: this.#annotationMode,
             annotationEditorMode: this.#annotationEditorMode,
             removePageBorders: this.removePageBorders,
-            imageResourcesPath: "/images/",
+            imageResourcesPath: "/images/"
         };
 
         const pdfViewer = this.singlePageViewer
@@ -215,7 +217,7 @@ export class PDFSlick {
                 l10n: this.l10n,
                 pageColors: this.pageColors,
                 store: store,
-                thumbnailWidth: this.thumbnailWidth,
+                thumbnailWidth: this.thumbnailWidth
             });
             renderingQueue.setThumbnailViewer(
                 this.thumbnailViewer as unknown as TPDFThumbnailViewer
@@ -226,7 +228,7 @@ export class PDFSlick {
             this.pdfPresentationMode = new PDFPresentationMode({
                 container,
                 pdfViewer: pdfViewer,
-                eventBus,
+                eventBus
             });
         }
 
@@ -239,7 +241,10 @@ export class PDFSlick {
         this.store.setState({ scaleValue });
     }
 
-    async loadDocument(url: string | URL | ArrayBuffer, options?: { filename?: string }) {
+    async loadDocument(
+        url: string | URL | ArrayBuffer,
+        options?: PDFSlickOptions
+    ) {
         if (this.url && typeof this.url === "string") {
             try {
                 URL.revokeObjectURL(this.url);
@@ -253,7 +258,9 @@ export class PDFSlick {
             if (url instanceof URL) {
                 this.url = url.toString();
             } else if (url instanceof ArrayBuffer) {
-                this.url = URL.createObjectURL(new Blob([url], { type: "application/pdf" }));
+                this.url = URL.createObjectURL(
+                    new Blob([url], { type: "application/pdf" })
+                );
             } else {
                 this.url = url;
             }
@@ -262,10 +269,13 @@ export class PDFSlick {
                 options?.filename ?? getPdfFilenameFromUrl(this.url?.toString());
             this.filename = filename;
 
-            const pdfDocument = await getDocument({
+            const pdfLoadingTask = getDocument({
                 url: this.url,
+                password: options?.password,
                 isEvalSupported: false
-            }).promise;
+            });
+            pdfLoadingTask.onPassword = options?.onPassword;
+            const pdfDocument = await pdfLoadingTask.promise;
 
             this.document = pdfDocument;
             this.viewer.setDocument(this.document);
@@ -283,7 +293,7 @@ export class PDFSlick {
                 numPages: pdfDocument.numPages,
                 pageNumber: 1,
                 isDocumentLoaded: true,
-                url: url.toString(),
+                url: url.toString()
             });
 
             const rawAttachments =
@@ -353,7 +363,7 @@ export class PDFSlick {
             creationDate: PDFDateString.toDateObject(info.CreationDate),
             modificationDate: PDFDateString.toDateObject(info.ModDate),
             isLinearized: info.IsLinearized,
-            pageSize,
+            pageSize
         });
     }
 
@@ -368,19 +378,19 @@ export class PDFSlick {
         if (pagesRotation % 180 !== 0) {
             pageSizeInches = {
                 width: pageSizeInches.height,
-                height: pageSizeInches.width,
+                height: pageSizeInches.width
             };
         }
         const isPortrait = isPortraitOrientation(pageSizeInches);
 
         let sizeInches = {
             width: Math.round(pageSizeInches.width * 100) / 100,
-            height: Math.round(pageSizeInches.height * 100) / 100,
+            height: Math.round(pageSizeInches.height * 100) / 100
         };
         // 1in == 25.4mm; no need to round to 2 decimals for millimeters.
         let sizeMillimeters = {
             width: Math.round(pageSizeInches.width * 25.4 * 10) / 10,
-            height: Math.round(pageSizeInches.height * 25.4 * 10) / 10,
+            height: Math.round(pageSizeInches.height * 25.4 * 10) / 10
         };
 
         let rawName =
@@ -399,11 +409,11 @@ export class PDFSlick {
             // and/or PDF files that define the page sizes in an imprecise manner.
             const exactMillimeters = {
                 width: pageSizeInches.width * 25.4,
-                height: pageSizeInches.height * 25.4,
+                height: pageSizeInches.height * 25.4
             };
             const intMillimeters = {
                 width: Math.round(sizeMillimeters.width),
-                height: Math.round(sizeMillimeters.height),
+                height: Math.round(sizeMillimeters.height)
             };
 
             // Try to avoid false positives, by only considering "small" differences.
@@ -417,7 +427,7 @@ export class PDFSlick {
                     // dimensions always correspond to the detected page name.
                     sizeInches = {
                         width: Math.round((intMillimeters.width / 25.4) * 100) / 100,
-                        height: Math.round((intMillimeters.height / 25.4) * 100) / 100,
+                        height: Math.round((intMillimeters.height / 25.4) * 100) / 100
                     };
                     sizeMillimeters = intMillimeters;
                 }
@@ -429,15 +439,20 @@ export class PDFSlick {
         const [{ width, height }, unit, name, orientation] = await Promise.all([
             _isNonMetricLocale ? sizeInches : sizeMillimeters,
             this.l10n.get(
-                `document_properties_page_size_unit_${_isNonMetricLocale ? "inches" : "millimeters"}`, null
+                `document_properties_page_size_unit_${_isNonMetricLocale ? "inches" : "millimeters"
+                }`,
+                null
             ),
             rawName &&
             this.l10n.get(
-                `document_properties_page_size_name_${rawName.toLowerCase()}`, null
+                `document_properties_page_size_name_${rawName.toLowerCase()}`,
+                null
             ),
             this.l10n.get(
-                `document_properties_page_size_orientation_${isPortrait ? "portrait" : "landscape"}`, null
-            ),
+                `document_properties_page_size_orientation_${isPortrait ? "portrait" : "landscape"
+                }`,
+                null
+            )
         ]);
 
         return {
@@ -445,7 +460,7 @@ export class PDFSlick {
             height: height.toLocaleString(),
             unit,
             name,
-            orientation,
+            orientation
         };
     }
 
@@ -460,10 +475,7 @@ export class PDFSlick {
         this.linkService.goToPage(pageNumber);
     }
 
-    openOrDownloadData(
-        data: Uint8Array,
-        filename: string
-    ) {
+    openOrDownloadData(data: Uint8Array, filename: string) {
         this.downloadManager?.openOrDownloadData(data, filename);
     }
 
@@ -656,7 +668,7 @@ export class PDFSlick {
             documentOutline,
             pageNumber: 1,
             scaleValue,
-            pagesReady: true,
+            pagesReady: true
         });
     }
 
@@ -715,12 +727,11 @@ export class PDFSlick {
     }
 
     setAnnotationEditorMode(annotationEditorMode: number) {
-        
-        this.viewer.annotationEditorMode = { mode: annotationEditorMode }
+        this.viewer.annotationEditorMode = { mode: annotationEditorMode };
         this.dispatch("switchannotationeditormode", {
             source: this,
             mode: annotationEditorMode
-        })
+        });
         this.store.setState({ annotationEditorMode });
     }
 
@@ -729,35 +740,30 @@ export class PDFSlick {
             | { type: number; value: any }
             | { type: number; value: any }[]
     ) {
-
-
         const pairs = Array.isArray(annotationEditorParams)
             ? annotationEditorParams
             : [annotationEditorParams];
 
         for (const params of pairs) {
-            this.dispatch("switchannotationeditorparams",
-            {
+            this.dispatch("switchannotationeditorparams", {
                 source: this,
                 type: params.type,
-                value: params.value,
+                value: params.value
             });
         }
     }
 
     setHighlightDefaultColor(color: string) {
-        this.setAnnotationEditorMode(
-            AnnotationEditorType.HIGHLIGHT
-        );
+        this.setAnnotationEditorMode(AnnotationEditorType.HIGHLIGHT);
 
         this.setAnnotationEditorParams([
             {
                 type: AnnotationEditorParamsType.HIGHLIGHT_DEFAULT_COLOR,
-                value: color,
-            },
+                value: color
+            }
         ]);
 
-        this.store.setState({ highlightDefaultColor: color })
+        this.store.setState({ highlightDefaultColor: color });
     }
 
     setSpreadMode(spread: number) {
